@@ -28,6 +28,12 @@ yarn-error.log*
 .env.*
 !.env.example
 
+# Smart X-Ray local security database
+backend/data/*.db
+backend/data/*.db-*
+*.sqlite
+*.sqlite3
+
 # Temporary files
 *.tmp
 *.log
