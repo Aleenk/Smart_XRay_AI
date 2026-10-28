@@ -1,39 +1,129 @@
 # Smart X-Ray AI
 
-Smart X-Ray AI is an educational AI-assisted chest X-ray analysis system developed as a final project.
+Smart X-Ray AI is an educational AI-assisted chest X-ray analysis system developed as a final Software Engineering project.
 
-The system allows a user to upload a chest X-ray image and receive AI-assisted screening for selected chest findings. It also provides short educational explanations and an AI Attention Map based on Grad-CAM.
+The application allows an authorized user to upload a chest X-ray image, receive AI-assisted screening for selected radiological findings, review model confidence scores, and request a Grad-CAM **AI Attention Map** that highlights image regions that influenced the model.
 
-> **Important:** Smart X-Ray AI is an educational decision-support prototype. It does not provide a medical diagnosis and does not replace professional medical evaluation.
+> **Medical safety notice:** Smart X-Ray AI is an educational decision-support prototype. It does **not** provide a medical diagnosis, does not replace a radiologist or physician, and is not intended for clinical use.
+
+## Public Application
+
+Cloud deployment:
+
+**https://smart-xray-ai-717746889062.me-west1.run.app**
+
+Source repository:
+
+**https://github.com/Aleenk/Smart_XRay_AI**
 
 ---
 
 ## Supported Findings
 
-The model analyzes chest X-rays for the following findings:
+The patient-facing application evaluates four selected chest findings:
 
 - Pneumonia
 - Pneumothorax
 - Pleural Effusion
 - Cardiomegaly
 
-The model was trained as a multi-label classifier, so more than one finding may be flagged in the same image.
+The model is multi-label, so more than one supported finding may be flagged for the same image.
+
+If none of the four supported findings crosses its validation-derived threshold, the application reports:
+
+**No selected finding detected**
+
+This message is not equivalent to a medical statement that the X-ray is normal.
 
 ---
 
 ## Main Features
 
-- Upload chest X-ray images in PNG or JPEG format
-- AI-assisted analysis using DenseNet121
-- Multi-label prediction for four supported findings
-- Validation-based decision thresholds for each finding
+### AI Analysis
+
+- PNG/JPEG chest X-ray upload
+- DenseNet121-based multi-label inference
+- Validation-derived decision threshold for each supported finding
+- Multiple findings can be returned for a single image
 - Patient-friendly result presentation
-- Short medical + engineering explanation of how a finding was identified
-- Grad-CAM AI Attention Map for explainability
-- Educational information for each supported finding
-- Medical disclaimer and safety messaging
-- FastAPI backend
-- React frontend
+- Educational explanation for each supported finding
+- Optional Grad-CAM AI Attention Map
+- Medical safety messaging
+
+### Authentication and Access Control
+
+- Username/password authentication
+- Bearer-token sessions
+- Session expiration
+- Logout and session revocation
+- Password hashing with PBKDF2-HMAC-SHA256 and random salts
+- Role-Based Access Control enforced by the FastAPI backend
+
+Three default roles are implemented:
+
+| Role | Analysis | Grad-CAM | View / Export Records | User Administration | Audit Trail |
+|---|---:|---:|---:|---:|---:|
+| ADMIN | Yes | Yes | Yes | Yes | Yes |
+| DOCTOR | Yes | Yes | Yes | No | No |
+| TECHNICIAN | Yes | Yes | No | No | No |
+
+The frontend hides unauthorized sections, while the backend independently enforces permissions and returns HTTP `403 Forbidden` for unauthorized access attempts.
+
+### Electronic Records
+
+For each successful analysis, the system can store an electronic analysis record containing:
+
+- Record ID
+- Timestamp
+- Username
+- User role
+- SHA-256 digest of the uploaded image
+- Image content type
+- Detected findings
+- Model scores
+- Whether no selected finding was detected
+
+The uploaded image bytes are **not** stored in the records database.
+
+Authorized ADMIN and DOCTOR users can export an individual analysis record as JSON.
+
+### Audit Trail
+
+The security layer maintains a time-stamped Audit Trail for important application and security events.
+
+Each audit entry contains a SHA-256 hash linked to the previous entry. The system can verify the chain and detect modification of a logged entry.
+
+ADMIN users can:
+
+- View the Audit Trail
+- Verify the audit hash chain
+- Export the Audit Trail as CSV
+
+---
+
+## Academic Part 11 / HIPAA-Oriented Safeguards
+
+Smart X-Ray AI includes an **academic implementation of controls inspired by electronic-record, access-control, audit, and privacy requirements** discussed in the course.
+
+Implemented safeguards include:
+
+- Individual user accounts
+- Role-based access restrictions
+- Password hashing
+- Expiring and revocable sessions
+- Time-stamped Audit Trail
+- SHA-256 audit integrity chain
+- Electronic analysis records
+- Record export
+- Audit export
+- Account activation/deactivation
+- Backend enforcement of authorization
+- HTTPS on the public Cloud Run deployment
+- Cloud passwords stored through Google Secret Manager rather than committed to source code
+- No patient name, address, date of birth, or other patient identity field is required by the application
+- Uploaded image bytes are not saved in the application records database
+
+> **Compliance limitation:** This project is **not** represented as FDA 21 CFR Part 11 certified, HIPAA compliant, clinically validated, or approved for regulated medical use. It is an academic prototype demonstrating selected safeguards and concepts.
 
 ---
 
@@ -45,28 +135,38 @@ The final model uses:
 - **Framework:** PyTorch
 - **Approach:** Transfer learning
 - **Task:** Multi-label chest X-ray classification
-- **Input size:** 224 x 224
+- **Input:** 224 × 224 pixels, 3 channels
 - **Final checkpoint:** Epoch 5
-- **Validation Disease Macro AUC:** approximately 0.8441
-- **Final Test Disease Macro AUC:** approximately 0.8507
+- **Validation disease Macro AUC:** approximately 0.8441
+- **Final test disease Macro AUC:** approximately 0.8507
 
-The model was trained on the NIH ChestX-ray14 dataset.
+The model was trained using the NIH ChestX-ray14 dataset.
 
-The dataset contains 112,120 chest X-ray images from 30,805 patients.
+Dataset summary:
 
-Patient-level splitting was used to reduce data leakage between train, validation, and test sets.
-
-Dataset split:
-
+- Total images: 112,120
+- Total patients: 30,805
 - Train: 78,566 images
 - Validation: 16,106 images
 - Test: 17,448 images
 
+Patient-level splitting was used to reduce leakage between training, validation, and test sets.
+
+### Training Outputs
+
+The training pipeline used five outputs:
+
+- Pneumonia
+- Pneumothorax
+- Effusion
+- Cardiomegaly
+- No Finding
+
+The patient-facing application presents the four selected disease findings. The message **No selected finding detected** is derived from the four disease thresholds and should not be interpreted as a confirmed normal study.
+
 ---
 
 ## Validation Thresholds
-
-Decision thresholds were selected using the validation set and were not tuned on the test set.
 
 | Finding | Threshold |
 |---|---:|
@@ -75,13 +175,11 @@ Decision thresholds were selected using the validation set and were not tuned on
 | Effusion | 0.2630 |
 | Cardiomegaly | 0.0492 |
 
-The thresholds are stored in:
+The threshold file is stored at:
 
 ```text
 backend/model/thresholds.json
 ```
-
-These values are used internally by the backend. They are not shown to the patient in the final interface.
 
 ---
 
@@ -94,7 +192,7 @@ These values are used internally by the backend. They are not shown to the patie
 | Effusion | 0.8763 | 0.8307 | 0.7730 | 0.3261 | 0.4684 |
 | Cardiomegaly | 0.9123 | 0.8387 | 0.8369 | 0.1308 | 0.2263 |
 
-Overall Disease Macro AUC on the final test set:
+Overall disease Macro AUC:
 
 ```text
 0.8507
@@ -106,23 +204,52 @@ No Finding AUC:
 0.7705
 ```
 
-Because some findings are relatively rare in the dataset, precision can be low even when recall and AUC are reasonable. For this reason, the application presents results as **possible findings for medical review**, not as confirmed diagnoses.
+Some selected findings are relatively rare in the dataset. As a result, precision can be low even when AUC and recall are stronger. For this reason, the interface uses cautious wording such as **Possible finding(s) detected** rather than presenting model output as a confirmed diagnosis.
 
 ---
 
-## Explainability with Grad-CAM
+## Grad-CAM Explainability
 
-Smart X-Ray AI includes Grad-CAM to provide an AI Attention Map.
+Smart X-Ray AI uses Grad-CAM to generate an **AI Attention Map** for a selected finding.
 
-The attention map highlights image regions that had a stronger influence on the model's prediction.
+The heatmap indicates image regions that influenced the model output. It does not prove that a disease is anatomically located in a highlighted region and must not be interpreted as a radiological localization result.
 
-It is important to understand that the highlighted regions:
+---
 
-- show model attention/influence
-- do not prove that disease is located in the highlighted area
-- do not replace radiological interpretation
+## Architecture
 
-The frontend displays the Grad-CAM map only when the user requests it.
+```text
+Authorized User
+      |
+      v
+React Frontend
+      |
+      | Bearer session token
+      v
+FastAPI Backend
+      |
+      +--------------------+
+      |                    |
+      v                    v
+Security Layer          AI Pipeline
+      |                    |
+      |                    v
+      |             Image preprocessing
+      |                    |
+      |                    v
+      |               DenseNet121
+      |                    |
+      |              +-----+------+
+      |              |            |
+      |              v            v
+      |          Prediction    Grad-CAM
+      |
+      +--> SQLite
+           - users
+           - sessions
+           - audit_log
+           - analysis_records
+```
 
 ---
 
@@ -130,65 +257,140 @@ The frontend displays the Grad-CAM map only when the user requests it.
 
 ```text
 Smart_XRay_AI/
-│
+|
 ├── backend/
 │   ├── main.py
-│   │
+│   ├── security.py
 │   ├── model/
 │   │   ├── inference.py
 │   │   ├── best_final_model.pth
 │   │   └── thresholds.json
-│   │
-│   └── utils/
-│       └── image_utils.py
-│
+│   ├── utils/
+│   │   └── image_utils.py
+│   └── data/
+│       └── smart_xray.db
+|
 ├── frontend/
 │   ├── src/
 │   │   ├── App.jsx
 │   │   ├── App.css
-│   │   └── index.css
-│   │
+│   │   ├── AuthGate.jsx
+│   │   ├── AuthGate.css
+│   │   ├── index.css
+│   │   └── main.jsx
 │   ├── package.json
-│   └── ...
-│
+│   └── package-lock.json
+|
+├── Dockerfile
 ├── requirements.txt
+├── requirements-cloud.txt
 └── README.md
 ```
 
 ---
 
-## Backend Setup
+## Main API Endpoints
 
-### 1. Create and activate a Python virtual environment
+### Public
+
+```text
+GET /health
+POST /auth/login
+```
+
+### Authenticated
+
+```text
+POST /auth/logout
+GET  /auth/me
+POST /predict
+POST /gradcam
+```
+
+### ADMIN
+
+```text
+GET   /admin/users
+POST  /admin/users
+PATCH /admin/users/{user_id}/active
+
+GET /audit
+GET /audit/verify
+GET /audit/export
+```
+
+### ADMIN or DOCTOR
+
+```text
+GET /records
+GET /records/{record_id}
+GET /records/{record_id}/export
+```
+
+---
+
+## Local Setup
+
+### Requirements
+
+- Python 3.12 recommended
+- Node.js / npm
+- Model checkpoint and threshold file under `backend/model/`
+
+### 1. Create the Python environment
 
 Windows PowerShell:
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-```
-
-### 2. Install Python dependencies
-
-```powershell
 pip install -r requirements.txt
 ```
 
-### 3. Start the FastAPI backend
+### 2. Configure local account passwords
 
-From the project root:
+Set the three environment variables **before the first startup that creates the local database**:
 
 ```powershell
-uvicorn backend.main:app --reload
+$env:SMART_XRAY_ADMIN_PASSWORD="<your-admin-password>"
+$env:SMART_XRAY_DOCTOR_PASSWORD="<your-doctor-password>"
+$env:SMART_XRAY_TECHNICIAN_PASSWORD="<your-technician-password>"
 ```
 
-The backend will run at:
+Default usernames:
+
+```text
+admin
+doctor
+technician
+```
+
+Do not commit real passwords to GitHub.
+
+> If the local database was already initialized, changing these environment variables does not automatically replace the password hashes of existing users.
+
+### 3. Build the React frontend
+
+```powershell
+cd frontend
+npm install
+npm run build
+cd ..
+```
+
+### 4. Start FastAPI
+
+```powershell
+.\.venv\Scripts\python.exe -m uvicorn backend.main:app --reload
+```
+
+Open:
 
 ```text
 http://127.0.0.1:8000
 ```
 
-FastAPI Swagger documentation:
+Swagger:
 
 ```text
 http://127.0.0.1:8000/docs
@@ -196,130 +398,148 @@ http://127.0.0.1:8000/docs
 
 ---
 
-## Frontend Setup
+## Database
 
-Node.js and npm are required.
+The security layer uses SQLite.
 
-### 1. Open the frontend directory
-
-```powershell
-cd frontend
-```
-
-### 2. Install frontend dependencies
-
-```powershell
-npm install
-```
-
-### 3. Start the React development server
-
-```powershell
-npm run dev
-```
-
-The frontend will normally run at:
+Local default:
 
 ```text
-http://localhost:5173
+backend/data/smart_xray.db
 ```
 
----
-
-## API Endpoints
-
-### `GET /`
-
-Checks whether the backend is running.
-
-### `GET /health`
-
-Returns backend health and model information.
-
-### `POST /predict`
-
-Accepts a PNG/JPEG chest X-ray and returns AI-assisted findings.
-
-### `POST /gradcam`
-
-Accepts a chest X-ray and a finding name and returns a Grad-CAM AI Attention Map.
-
-Supported finding names:
+On Google Cloud Run:
 
 ```text
-Pneumonia
-Pneumothorax
-Effusion
-Cardiomegaly
+/tmp/smart_xray.db
 ```
+
+Tables:
+
+- `users`
+- `sessions`
+- `audit_log`
+- `analysis_records`
+
+### Important Cloud Limitation
+
+Cloud Run's writable local filesystem is ephemeral. Therefore the current SQLite database under `/tmp` is suitable for an academic demonstration but **not** for durable regulated records.
+
+A new Cloud Run instance, restart, or revision may result in a fresh local database. A production-grade system would require a persistent managed database and appropriate backup, retention, access-control, monitoring, and regulatory processes.
 
 ---
 
-## Typical System Flow
+## Security Configuration
+
+### Password Storage
+
+The current implementation uses:
+
+- PBKDF2-HMAC-SHA256
+- Random 16-byte salt
+- 260,000 iterations
+
+### Sessions
+
+- Random bearer token
+- SHA-256 token digest stored in the database
+- Default lifetime: 8 hours
+- Logout revokes the session
+
+The lifetime can be changed with:
 
 ```text
-User uploads chest X-ray
-        ↓
-React frontend
-        ↓
-FastAPI backend
-        ↓
-Image preprocessing
-        ↓
-DenseNet121 final model
-        ↓
-Multi-label prediction
-        ↓
-Validation thresholds
-        ↓
-Possible finding(s)
-        ↓
-Medical + engineering explanation
-        ↓
-Optional Grad-CAM AI Attention Map
+SMART_XRAY_SESSION_HOURS
 ```
 
+### Cloud Secrets
+
+The Cloud Run deployment reads account passwords from Google Secret Manager.
+
+Environment-variable mappings:
+
+```text
+SMART_XRAY_ADMIN_PASSWORD
+    -> smart-xray-admin-password
+
+SMART_XRAY_DOCTOR_PASSWORD
+    -> smart-xray-doctor-password
+
+SMART_XRAY_TECHNICIAN_PASSWORD
+    -> smart-xray-technician-password
+```
+
+The Cloud Run revision service account requires the **Secret Manager Secret Accessor** IAM role for the referenced secrets.
+
 ---
 
-## Medical Safety
+## Cloud Deployment
 
-The system is designed for educational and research purposes only.
+The repository includes a multi-stage Dockerfile:
 
-It must not be used as a substitute for a doctor, radiologist, emergency service, or clinical diagnostic system.
+1. Node 24 Alpine builds the React frontend.
+2. Python 3.12 slim installs the backend dependencies.
+3. The React production build is copied into the final FastAPI container.
+4. Uvicorn listens on the Cloud Run `PORT`.
 
-A result such as "Possible finding detected" means that the model identified image patterns associated with that finding according to its learned representation and decision criteria. It does **not** confirm that the patient has the condition.
+Region:
 
-If a user has severe symptoms such as significant chest pain, severe breathing difficulty, fainting, confusion, or other urgent symptoms, they should seek appropriate medical care regardless of the AI result.
+```text
+me-west1
+```
+
+Public URL:
+
+**https://smart-xray-ai-717746889062.me-west1.run.app**
 
 ---
 
-## Technologies
+## Production Dependency Versions
 
-### AI / Machine Learning
+| Component | Version |
+|---|---|
+| Python base image | 3.12-slim |
+| Node build image | 24-alpine |
+| FastAPI | 0.157.0 |
+| Uvicorn | 0.54.0 |
+| Pillow | 13.0.0 |
+| NumPy | 2.5.4 |
+| PyTorch CPU | 2.14.1+cpu |
+| Torchvision CPU | 0.29.1+cpu |
+| React | ^19.3.1 |
+| React DOM | ^19.3.1 |
+| Vite | ^8.3.4 |
 
-- Python
-- PyTorch
-- Torchvision
-- DenseNet121
-- NumPy
-- Pandas
-- scikit-learn
-- Matplotlib
-- Grad-CAM
+Some packages, such as `python-multipart`, are currently not version-pinned in `requirements-cloud.txt`.
 
-### Backend
+---
 
-- FastAPI
-- Uvicorn
-- Pillow
-- python-multipart
+## Privacy and Data Handling
 
-### Frontend
+The application does not require the user to enter patient identity information.
 
-- React
-- Vite
-- JavaScript
-- CSS
+For analysis records, the current implementation stores a SHA-256 digest of the uploaded image instead of storing the uploaded image bytes in the SQLite records database.
+
+This design reduces stored data but does **not** by itself make the application suitable for processing real protected health information.
+
+Do not use identifiable clinical data with this academic prototype.
+
+---
+
+## Known Limitations
+
+- Educational prototype only
+- Not a medical device
+- Not clinically validated
+- Not FDA 21 CFR Part 11 certified
+- Not formally HIPAA compliant
+- Low precision for some rare findings
+- Grad-CAM indicates model attention, not confirmed disease localization
+- Current Cloud Run SQLite storage is ephemeral
+- No production-grade persistent clinical database
+- No formal electronic-signature workflow
+- No hospital identity provider integration
+- No formal regulatory validation package
 
 ---
 
@@ -327,13 +547,15 @@ If a user has severe symptoms such as significant chest pain, severe breathing d
 
 Final project developed by:
 
-- Aleen alasd
-- Shaima Nabari
+- **aleen alasd**
+- **Shayma Nabbari**
 
-Instructor: Shay Ginzburg
+Instructor:
+
+- **Shay Ginzburg**
 
 ---
 
 ## Disclaimer
 
-Smart X-Ray AI is an educational decision-support prototype created as an academic project. It does not provide medical diagnosis, treatment recommendations, or clinical clearance.
+Smart X-Ray AI is an educational decision-support prototype created as an academic project. It does not provide a diagnosis, treatment recommendation, or clinical clearance. Model outputs and attention maps must not be used as a substitute for professional medical evaluation.
